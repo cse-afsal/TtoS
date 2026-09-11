@@ -30,7 +30,7 @@ HTML_PAGE = """<!DOCTYPE html>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VoxCraft &mdash; Text to Speech</title>
+  <title>TtoS &mdash; Text to Speech</title>
   <meta name="description" content="Convert text to natural-sounding MP3 audio instantly. Supports 16 languages and multiple regional accents." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -525,7 +525,7 @@ HTML_PAGE = """<!DOCTYPE html>
       <div class="brand-mark">
         <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3m7 9c0 3.53-2.61 6.44-6 6.93V21h-2v-3.07c-3.39-.49-6-3.4-6-6.93h2a5 5 0 0 0 10 0h2z"/></svg>
       </div>
-      VoxCraft
+      TtoS
     </a>
     <div class="nav-badge">Free &amp; instant</div>
   </div>
@@ -582,7 +582,7 @@ HTML_PAGE = """<!DOCTYPE html>
       <div class="prev-bar"    style="animation-delay:.15s"></div>
     </div>
     <div class="prev-meta">
-      <span class="prev-filename">voxcraft_speech.mp3</span>
+      <span class="prev-filename">ttos_speech.mp3</span>
       <span class="prev-pill">Ready</span>
     </div>
     <div class="prev-tags">
@@ -762,7 +762,7 @@ HTML_PAGE = """<!DOCTYPE html>
       <div class="foot-mark">
         <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3m7 9c0 3.53-2.61 6.44-6 6.93V21h-2v-3.07c-3.39-.49-6-3.4-6-6.93h2a5 5 0 0 0 10 0h2z"/></svg>
       </div>
-      VoxCraft
+      TtoS
     </a>
     <p class="foot-copy">Built with Google Text-to-Speech &amp; Flask &nbsp;&middot;&nbsp; &copy; 2025</p>
   </div>
@@ -805,7 +805,7 @@ HTML_PAGE = """<!DOCTYPE html>
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
-      a.href = url; a.download = 'voxcraft_speech.mp3';
+      a.href = url; a.download = 'ttos_speech.mp3';
       document.body.appendChild(a); a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
@@ -871,7 +871,7 @@ def generate():
             audio_buffer,
             mimetype="audio/mpeg",
             as_attachment=True,
-            download_name="voxcraft_speech.mp3"
+            download_name="ttos_speech.mp3"
         )
     except Exception as e:
         return jsonify({"error": str(e)}), 500
