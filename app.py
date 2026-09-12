@@ -1,10 +1,11 @@
-from flask import Flask, request, send_file, render_template_string, jsonify
+from flask import Flask, request, send_file, render_template_string, jsonify, make_response
 from flask_cors import CORS
 from gtts import gTTS
+from deep_translator import GoogleTranslator
 import io
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, expose_headers=["X-Translated-Text"])
 
 LANGUAGES = {
     "en": "English",
@@ -452,6 +453,28 @@ HTML_PAGE = """<!DOCTYPE html>
     #msg.ok  { display: flex; background: var(--green-lt); border: 1px solid var(--green-bd); color: var(--green); }
     #msg.err { display: flex; background: var(--red-lt);   border: 1px solid var(--red-bd);   color: var(--red); }
 
+    /* ── TRANSLATION PREVIEW ───────────────────────── */
+    .trans-preview {
+      display: none;
+      margin-top: 13px;
+      padding: 14px 16px;
+      background: var(--accent-lt);
+      border: 1px solid var(--accent-bd);
+      border-radius: var(--r-md);
+    }
+    .trans-preview.show { display: block; }
+    .trans-label {
+      font-size: .7rem; font-weight: 700;
+      letter-spacing: .06em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 8px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .trans-label svg { width: 13px; height: 13px; fill: var(--accent); }
+    .trans-text {
+      font-size: .88rem; line-height: 1.65;
+      color: var(--sub); word-break: break-word;
+    }
+
     /* ── SIDEBAR ───────────────────────────────────── */
     .sidebar { display: flex; flex-direction: column; gap: 14px; }
 
@@ -540,7 +563,7 @@ HTML_PAGE = """<!DOCTYPE html>
     </div>
     <h1>Convert text into<br/><span class="accent">natural speech</span></h1>
     <p class="hero-desc">
-      Paste any text, pick one of 16 languages, and download a clean MP3 file in seconds. No sign-up required.
+      Type in any language — the app auto-translates your text into 16 languages and speaks it aloud. Download a clean MP3 in seconds.
     </p>
     <div class="hero-meta">
       <span class="meta-item">
@@ -672,11 +695,20 @@ HTML_PAGE = """<!DOCTYPE html>
           <div class="pw" style="animation-delay:.15s"></div>
           <div class="pw" style="animation-delay:0s"></div>
         </div>
-        <span class="proc-text">Generating audio&hellip;</span>
+        <span class="proc-text" id="proc-text">Translating &amp; generating audio&hellip;</span>
       </div>
 
       <!-- Status -->
       <div id="msg"></div>
+
+      <!-- Translation preview -->
+      <div class="trans-preview" id="trans-preview">
+        <div class="trans-label">
+          <svg viewBox="0 0 24 24"><path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/></svg>
+          Translated text
+        </div>
+        <div class="trans-text" id="trans-text"></div>
+      </div>
 
     </div>
   </div>
@@ -799,11 +831,23 @@ HTML_PAGE = """<!DOCTYPE html>
     const slow = document.getElementById('slow-toggle').checked;
     const btn  = document.getElementById('generate-btn');
     const proc = document.getElementById('proc');
+    const procText = document.getElementById('proc-text');
+    const transPreview = document.getElementById('trans-preview');
+    const transText = document.getElementById('trans-text');
 
     btn.disabled = true;
     btn.classList.add('loading');
     proc.classList.add('show');
+    transPreview.classList.remove('show');
     clearMsg();
+
+    // Update processing text based on language
+    if (lang === 'en') {
+      procText.innerHTML = 'Generating audio&hellip;';
+    } else {
+      const langName = document.getElementById('lang-select').selectedOptions[0].text;
+      procText.innerHTML = 'Translating to ' + langName + ' &amp; generating audio&hellip;';
+    }
 
     try {
       const res = await fetch('/generate', {
@@ -814,6 +858,13 @@ HTML_PAGE = """<!DOCTYPE html>
 
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Server error'); }
 
+      // Check for translated text in response header
+      const translatedHeader = res.headers.get('X-Translated-Text');
+      if (translatedHeader) {
+        transText.textContent = decodeURIComponent(translatedHeader);
+        transPreview.classList.add('show');
+      }
+
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
@@ -822,7 +873,12 @@ HTML_PAGE = """<!DOCTYPE html>
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      showMsg('ok', 'Your MP3 file is downloading.');
+      const langName = document.getElementById('lang-select').selectedOptions[0].text;
+      if (lang === 'en') {
+        showMsg('ok', 'Your MP3 file is downloading.');
+      } else {
+        showMsg('ok', 'Translated to ' + langName + ' — MP3 is downloading.');
+      }
     } catch (e) {
       showMsg('err', e.message);
     } finally {
@@ -875,17 +931,30 @@ def generate():
         return jsonify({"error": "Unsupported language."}), 400
 
     try:
-        tts = gTTS(text=text, lang=lang, tld=tld, slow=slow)
+        # Translate the text into the target language first (skip if already English)
+        translated_text = text
+        if lang != "en":
+            # deep-translator uses 'zh-CN' as-is for Chinese Simplified
+            translated_text = GoogleTranslator(source='auto', target=lang).translate(text)
+
+        tts = gTTS(text=translated_text, lang=lang, tld=tld, slow=slow)
         audio_buffer = io.BytesIO()
         tts.write_to_fp(audio_buffer)
         audio_buffer.seek(0)
 
-        return send_file(
-            audio_buffer,
-            mimetype="audio/mpeg",
-            as_attachment=True,
-            download_name="ttos_speech.mp3"
+        response = make_response(
+            send_file(
+                audio_buffer,
+                mimetype="audio/mpeg",
+                as_attachment=True,
+                download_name="ttos_speech.mp3"
+            )
         )
+        # Send the translated text back in a header so the frontend can display it
+        if lang != "en":
+            import urllib.parse
+            response.headers["X-Translated-Text"] = urllib.parse.quote(translated_text)
+        return response
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
