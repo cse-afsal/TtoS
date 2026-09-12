@@ -3,6 +3,7 @@ from flask_cors import CORS
 from gtts import gTTS
 from deep_translator import GoogleTranslator
 import io
+import urllib.parse
 
 app = Flask(__name__)
 CORS(app, expose_headers=["X-Translated-Text"])
@@ -914,6 +915,18 @@ def index():
     return render_template_string(HTML_PAGE, languages=LANGUAGES)
 
 
+# deep-translator language codes that differ from gTTS codes
+TRANSLATOR_LANG_MAP = {
+    "zh-CN": "zh-CN",   # Chinese Simplified  — works in both
+    "pt":    "pt",       # Portuguese          — works in both
+    "sv":    "sv",       # Swedish             — works in both
+}
+
+def get_translator_code(gtts_lang: str) -> str:
+    """Return the deep-translator language code for a given gTTS lang code."""
+    return TRANSLATOR_LANG_MAP.get(gtts_lang, gtts_lang)
+
+
 @app.route("/generate", methods=["POST"])
 def generate():
     data = request.get_json()
@@ -930,13 +943,20 @@ def generate():
     if lang not in LANGUAGES:
         return jsonify({"error": "Unsupported language."}), 400
 
-    try:
-        # Translate the text into the target language first (skip if already English)
-        translated_text = text
-        if lang != "en":
-            # deep-translator uses 'zh-CN' as-is for Chinese Simplified
-            translated_text = GoogleTranslator(source='auto', target=lang).translate(text)
+    # ── Step 1: Translate ─────────────────────────────────────────────────────
+    translated_text = text
+    if lang != "en":
+        try:
+            translator_code = get_translator_code(lang)
+            result = GoogleTranslator(source="auto", target=translator_code).translate(text)
+            if not result or not result.strip():
+                return jsonify({"error": f"Translation to {LANGUAGES[lang]} returned empty result. Please try again."}), 500
+            translated_text = result.strip()
+        except Exception as e:
+            return jsonify({"error": f"Translation failed for {LANGUAGES[lang]}: {str(e)}"}), 500
 
+    # ── Step 2: Text-to-Speech ────────────────────────────────────────────────
+    try:
         tts = gTTS(text=translated_text, lang=lang, tld=tld, slow=slow)
         audio_buffer = io.BytesIO()
         tts.write_to_fp(audio_buffer)
@@ -952,7 +972,6 @@ def generate():
         )
         # Send the translated text back in a header so the frontend can display it
         if lang != "en":
-            import urllib.parse
             response.headers["X-Translated-Text"] = urllib.parse.quote(translated_text)
         return response
     except Exception as e:
