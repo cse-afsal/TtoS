@@ -31,7 +31,7 @@ HTML_PAGE = """<!DOCTYPE html>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TtoS &mdash; Text to Speech</title>
-  <meta name="description" content="Convert text to natural-sounding MP3 audio instantly. Supports 16 languages and multiple regional accents." />
+  <meta name="description" content="Convert text to natural-sounding MP3 audio instantly. Supports 16 languages including Spanish, French, German, Hindi, Japanese, and more." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -540,7 +540,7 @@ HTML_PAGE = """<!DOCTYPE html>
     </div>
     <h1>Convert text into<br/><span class="accent">natural speech</span></h1>
     <p class="hero-desc">
-      Paste any text, pick a language and accent, and download a clean MP3 file in seconds. No sign-up required.
+      Paste any text, pick one of 16 languages, and download a clean MP3 file in seconds. No sign-up required.
     </p>
     <div class="hero-meta">
       <span class="meta-item">
@@ -549,7 +549,7 @@ HTML_PAGE = """<!DOCTYPE html>
       </span>
       <span class="meta-item">
         <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-        5 regional accents
+        EN accents (US, UK, AU, IN, CA)
       </span>
       <span class="meta-item">
         <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
@@ -620,17 +620,17 @@ HTML_PAGE = """<!DOCTYPE html>
       </div>
 
       <!-- Language + Accent -->
-      <div class="field-pair">
+      <div class="field-pair" id="lang-accent-row">
         <div class="inner">
           <label for="lang-select">Language</label>
-          <select id="lang-select">
+          <select id="lang-select" onchange="onLangChange(this.value)">
             {% for code, name in languages.items() %}
             <option value="{{ code }}" {% if code == 'en' %}selected{% endif %}>{{ name }}</option>
             {% endfor %}
           </select>
         </div>
-        <div class="inner">
-          <label for="tld-select">Accent</label>
+        <div class="inner" id="accent-field">
+          <label for="tld-select">Accent <span style="font-size:.68rem;color:var(--ghost);font-weight:400">(English only)</span></label>
           <select id="tld-select">
             <option value="com">United States</option>
             <option value="co.uk">United Kingdom</option>
@@ -739,7 +739,7 @@ HTML_PAGE = """<!DOCTYPE html>
           <div class="stp-num">2</div>
           <div>
             <div class="stp-title">Configure voice</div>
-            <div class="stp-desc">Choose language, regional accent, and speed.</div>
+             <div class="stp-desc">Choose language (and English accent), then set speed.</div>
           </div>
         </div>
         <div class="stp">
@@ -777,6 +777,18 @@ HTML_PAGE = """<!DOCTYPE html>
     pill.textContent = n + ' / 5000';
     pill.classList.toggle('warn', n > 4500);
   });
+
+  function onLangChange(lang) {
+    const accentField = document.getElementById('accent-field');
+    // gTTS tld/accent parameter only works for English
+    if (lang === 'en') {
+      accentField.style.display = '';
+    } else {
+      accentField.style.display = 'none';
+    }
+  }
+  // Run on page load to reflect the default selected language
+  onLangChange(document.getElementById('lang-select').value);
 
   async function generateSpeech() {
     const text = ta.value.trim();
@@ -851,7 +863,8 @@ def generate():
     data = request.get_json()
     text = data.get("text", "").strip()
     lang = data.get("lang", "en")
-    tld  = data.get("tld", "com")
+    # tld (accent) only works with gTTS when lang='en'; force 'com' for all others
+    tld  = data.get("tld", "com") if lang == "en" else "com"
     slow = bool(data.get("slow", False))
 
     if not text:
